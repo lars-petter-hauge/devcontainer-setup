@@ -83,8 +83,9 @@ Enter a devcontainer, creating it if needed. Builds the container on first
 run, then creates a tmux session whose panes connect into the container via
 docker exec.
 
-When called without arguments, lists running devcontainers instead of
-building a new one. Use `dev .` to explicitly target the current directory.
+When called without arguments, always lists running devcontainers instead
+of attaching, even if one is already running for the current directory.
+Use `dev .` to explicitly target and attach to the current directory.
 
 Arguments:
   project        Workspace directory to use (with --name, the repo the
@@ -101,7 +102,7 @@ Options:
                           other's files. Requires project to be a git repo.
 
 Examples:
-  dev                    Enter container for cwd, or list running containers
+  dev                    List running containers (does not attach)
   dev .                  Use current directory as workspace
   dev myproj             Use ./myproj as workspace
   dev projA projB        projA as workspace, projB mounted alongside
@@ -266,23 +267,28 @@ function dev() {
     done
   fi
 
-  # Find existing container or rebuild if --ssh requires a fresh one
-  local container_id
-  container_id=$(docker ps -q --filter "label=devcontainer.local_folder=$ws")
-
-  if [[ -z "$container_id" && "$explicit_ws" -eq 0 ]]; then
+  # Called with no arguments: always list running containers instead of
+  # attaching, even if one happens to match cwd exactly. Use `dev .` to
+  # explicitly target and attach to the current directory.
+  if [[ "$explicit_ws" -eq 0 ]]; then
     local running
     running=$(docker ps --filter "label=devcontainer.local_folder" --format '{{.ID}}\t{{.Label "devcontainer.local_folder"}}' 2>/dev/null)
     if [[ -n "$running" ]]; then
-      echo "No devcontainer for current directory. Running containers:"
+      echo "Running containers:"
       echo "$running" | while IFS=$'\t' read -r cid folder; do
-        echo "  $(basename "$folder")  ($folder)"
+        local suffix=""
+        [[ "$folder" == "$ws" ]] && suffix="  (current directory)"
+        echo "  $(basename "$folder")  ($folder)$suffix"
       done
     else
       echo "No devcontainers running."
     fi
     return 0
   fi
+
+  # Find existing container or rebuild if --ssh requires a fresh one
+  local container_id
+  container_id=$(docker ps -q --filter "label=devcontainer.local_folder=$ws")
 
   if [[ -n "$container_id" && "$ssh_requested" == "1" ]]; then
     docker rm -f "$container_id" >/dev/null
