@@ -83,8 +83,11 @@ Enter a devcontainer, creating it if needed. Builds the container on first
 run, then creates a tmux session whose panes connect into the container via
 docker exec.
 
+When called without arguments, lists running devcontainers instead of
+building a new one. Use `dev .` to explicitly target the current directory.
+
 Arguments:
-  project        Workspace directory to use (default: current directory)
+  project        Workspace directory to use
   extra...       Additional project directories to mount alongside
 
 Options:
@@ -93,7 +96,8 @@ Options:
                           a fresh container if one is already running)
 
 Examples:
-  dev                    Use current directory as workspace (no SSH agent)
+  dev                    Enter container for cwd, or list running containers
+  dev .                  Use current directory as workspace
   dev myproj             Use ./myproj as workspace
   dev projA projB        projA as workspace, projB mounted alongside
   dev --ssh myproj       Start myproj with SSH agent access
