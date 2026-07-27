@@ -128,10 +128,12 @@ function dev() {
   # Resolve workspace and extra mount paths
   local ws
   local -a extra=()
+  local explicit_ws=0
 
   if (( $# == 0 )); then
     ws="$(pwd)"
   else
+    explicit_ws=1
     ws="$(cd "$1" && pwd)"
     shift
     for arg in "$@"; do
@@ -142,6 +144,20 @@ function dev() {
   # Find existing container or rebuild if --ssh requires a fresh one
   local container_id
   container_id=$(docker ps -q --filter "label=devcontainer.local_folder=$ws")
+
+  if [[ -z "$container_id" && "$explicit_ws" -eq 0 ]]; then
+    local running
+    running=$(docker ps --filter "label=devcontainer.local_folder" --format '{{.ID}}\t{{.Label "devcontainer.local_folder"}}' 2>/dev/null)
+    if [[ -n "$running" ]]; then
+      echo "No devcontainer for current directory. Running containers:"
+      echo "$running" | while IFS=$'\t' read -r cid folder; do
+        echo "  $(basename "$folder")  ($folder)"
+      done
+    else
+      echo "No devcontainers running."
+    fi
+    return 0
+  fi
 
   if [[ -n "$container_id" && "$ssh_requested" == "1" ]]; then
     docker rm -f "$container_id" >/dev/null
