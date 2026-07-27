@@ -315,9 +315,18 @@ function dev() {
     container_id=$(docker ps -q --filter "label=devcontainer.local_folder=$ws")
   fi
 
+  # Inside the container each workspace has its own isolated filesystem, so
+  # the "-wt-<branch>" suffix (needed on the host to keep worktree
+  # directories collision-free) serves no purpose there. Use the repo's
+  # plain basename for the in-container symlink/cwd, while keeping the
+  # suffixed name for the tmux session and wrapper script, which are shared
+  # across the host and must stay unique per parallel session.
+  local display_name
+  display_name="$(basename "$(_dev_repo_root "$ws")")"
+
   # Create convenience symlinks inside the container (~/projects/<name>)
   docker exec -u vscode "$container_id" mkdir -p /home/vscode/projects 2>/dev/null
-  docker exec -u vscode "$container_id" ln -sfn "$ws" "/home/vscode/projects/$(basename "$ws")" 2>/dev/null
+  docker exec -u vscode "$container_id" ln -sfn "$ws" "/home/vscode/projects/$display_name" 2>/dev/null
   for p in "${extra[@]}"; do
     docker exec -u vscode "$container_id" ln -sfn "$p" "/home/vscode/projects/$(basename "$p")" 2>/dev/null
   done
@@ -332,7 +341,7 @@ function dev() {
   cat > "$wrapper" <<EOF
 #!/bin/sh
 GH_TOKEN=\$(cat ~/.config/gh-copilot-token 2>/dev/null)
-exec docker exec -it -e TERM="$TERM" -e USER=vscode -e "GH_TOKEN=\$GH_TOKEN" -u vscode $container_id zsh -c 'export PATH="\$HOME/.nix-profile/bin:\$PATH"; cd ~/projects/'$project_name' && exec zsh -li'
+exec docker exec -it -e TERM="$TERM" -e USER=vscode -e "GH_TOKEN=\$GH_TOKEN" -u vscode $container_id zsh -c 'export PATH="\$HOME/.nix-profile/bin:\$PATH"; cd ~/projects/'$display_name' && exec zsh -li'
 EOF
   chmod +x "$wrapper"
 
