@@ -188,7 +188,7 @@ function dev() {
   cat > "$wrapper" <<EOF
 #!/bin/sh
 GH_TOKEN=\$(cat ~/.config/gh-copilot-token 2>/dev/null)
-exec docker exec -it -e TERM="$TERM" -e "GH_TOKEN=\$GH_TOKEN" -u vscode $container_id zsh -lic "cd ~/projects/'$project_name' && exec zsh -li"
+exec docker exec -it -e TERM="$TERM" -e "GH_TOKEN=\$GH_TOKEN" -u vscode $container_id sh -c '. "\$HOME/.nix-profile/etc/profile.d/nix.sh" 2>/dev/null; cd ~/projects/'$project_name' && exec zsh -li'
 EOF
   chmod +x "$wrapper"
 
