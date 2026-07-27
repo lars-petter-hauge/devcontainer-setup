@@ -87,13 +87,18 @@ When called without arguments, lists running devcontainers instead of
 building a new one. Use `dev .` to explicitly target the current directory.
 
 Arguments:
-  project        Workspace directory to use
+  project        Workspace directory to use (with --worktree, the repo the
+                 worktree is created from)
   extra...       Additional project directories to mount alongside
 
 Options:
   -h, --help              Show this help message and exit
   -s, --ssh, --enable-ssh Forward the SSH agent into the container (forces
                           a fresh container if one is already running)
+  -w, --worktree BRANCH   Create (if needed) a git worktree for BRANCH next
+                          to the project, and use it as the workspace instead
+                          of the project directory itself. Requires project
+                          to be inside a git repository.
 
 Examples:
   dev                    Enter container for cwd, or list running containers
@@ -101,7 +106,48 @@ Examples:
   dev myproj             Use ./myproj as workspace
   dev projA projB        projA as workspace, projB mounted alongside
   dev --ssh myproj       Start myproj with SSH agent access
+  dev --worktree feature-x myproj
+                         Create/reuse a worktree for feature-x from ./myproj
+                         at ./myproj-wt-feature-x and use it as the workspace
 EOF
+}
+
+# Sibling directory named after the repo + branch, so the session/wrapper
+# naming (keyed off basename) stays collision-free without further changes.
+# Usage: _dev_worktree_path <repo> <branch>
+function _dev_worktree_path() {
+  local repo="$1" branch="$2"
+  local sanitized_branch="${branch//\//-}"
+  echo "${repo}-wt-${sanitized_branch}"
+}
+
+# Ensure a git worktree exists for <branch> off <repo>, creating the branch
+# if it doesn't exist yet. Reuses the worktree if already present. Prints the
+# worktree path on stdout on success.
+# Usage: _dev_ensure_worktree <repo> <branch>
+function _dev_ensure_worktree() {
+  local repo="$1" branch="$2"
+
+  if ! git -C "$repo" rev-parse --is-inside-work-tree &>/dev/null; then
+    echo "dev: --worktree requires $repo to be a git repository" >&2
+    return 1
+  fi
+
+  local wt_path
+  wt_path="$(_dev_worktree_path "$repo" "$branch")"
+
+  if [[ -e "$wt_path" ]]; then
+    if ! git -C "$repo" worktree list --porcelain | grep -qF "worktree $wt_path"; then
+      echo "dev: $wt_path already exists and is not a worktree of $repo" >&2
+      return 1
+    fi
+  elif git -C "$repo" rev-parse --verify --quiet "$branch" &>/dev/null; then
+    git -C "$repo" worktree add "$wt_path" "$branch" >&2 || return 1
+  else
+    git -C "$repo" worktree add -b "$branch" "$wt_path" >&2 || return 1
+  fi
+
+  echo "$wt_path"
 }
 
 # Enter a devcontainer, creating it if needed.
@@ -113,7 +159,7 @@ EOF
 # Run `dev --help` for details.
 function dev() {
   local -A opts
-  zparseopts -D -E -A opts -- h -help s -ssh -enable-ssh
+  zparseopts -D -E -A opts -- h -help s -ssh -enable-ssh w: -worktree:
 
   if (( ${+opts[-h]} || ${+opts[--help]} )); then
     _dev_usage
@@ -128,6 +174,31 @@ function dev() {
   fi
   local no_ssh="1"
   [[ "$ssh_requested" == "1" ]] && no_ssh="0"
+
+  # --worktree is opt-in and only touches git; without it dev behaves exactly
+  # as before, regardless of whether the target is a git repo at all.
+  local worktree_branch=""
+  if (( ${+opts[-w]} )); then
+    worktree_branch="${opts[-w]}"
+  elif (( ${+opts[--worktree]} )); then
+    worktree_branch="${opts[--worktree]}"
+  fi
+
+  if [[ -n "$worktree_branch" ]]; then
+    local repo_arg="."
+    if (( $# > 0 )); then
+      repo_arg="$1"
+      shift
+    fi
+
+    local repo
+    repo="$(cd "$repo_arg" && pwd)" || return 1
+
+    local wt_path
+    wt_path="$(_dev_ensure_worktree "$repo" "$worktree_branch")" || return 1
+
+    set -- "$wt_path" "$@"
+  fi
 
   # Resolve workspace and extra mount paths
   local ws
@@ -224,15 +295,39 @@ EOF
 }
 
 # Remove a running devcontainer for the given workspace.
+# With -w/--worktree BRANCH, also kills the associated tmux session and
+# removes the git worktree at <repo>-wt-<branch> (created by `dev --worktree`).
 function rmdev() {
-  local ws="${1:-.}"
-  ws="$(cd "$ws" && pwd)"
+  local -A opts
+  zparseopts -D -E -A opts -- w: -worktree:
+
+  local worktree_branch=""
+  if (( ${+opts[-w]} )); then
+    worktree_branch="${opts[-w]}"
+  elif (( ${+opts[--worktree]} )); then
+    worktree_branch="${opts[--worktree]}"
+  fi
+
+  local repo
+  repo="$(cd "${1:-.}" && pwd)"
+
+  local ws="$repo"
+  if [[ -n "$worktree_branch" ]]; then
+    ws="$(_dev_worktree_path "$repo" "$worktree_branch")"
+  fi
+
   local container_id
   container_id=$(docker ps -q --filter "label=devcontainer.local_folder=$ws")
   if [[ -n "$container_id" ]]; then
     docker rm -f "$container_id"
   else
     echo "No running devcontainer found for $ws"
+  fi
+
+  if [[ -n "$worktree_branch" ]]; then
+    tmux kill-session -t "$(basename "$ws")" 2>/dev/null
+    git -C "$repo" worktree remove "$ws" 2>/dev/null ||
+      echo "rmdev: could not remove worktree $ws (uncommitted changes? try: git -C $repo worktree remove --force $ws)"
   fi
 }
 
