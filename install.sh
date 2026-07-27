@@ -26,6 +26,7 @@ fi
 files=(
   .devcontainer-helpers.sh
   .tmux/default-cmd.sh
+  .tmux/devcontainer.conf
 )
 
 for file in "${files[@]}"; do
@@ -42,6 +43,18 @@ for file in "${files[@]}"; do
   ln -s "$source" "$target"
   echo "Linked $file"
 done
+
+TMUX_CONF_LOCAL="$HOME/.tmux.conf.local"
+SOURCE_LINE="source-file ~/.tmux/devcontainer.conf"
+if [ -f "$TMUX_CONF_LOCAL" ] && grep -qF "$SOURCE_LINE" "$TMUX_CONF_LOCAL"; then
+  echo "tmux already configured."
+else
+  echo
+  echo "To enable the tmux default-command, add this to ~/.tmux.conf.local:"
+  echo
+  echo "  $SOURCE_LINE"
+  echo
+fi
 
 echo
 echo "devcontainer-setup installed."
