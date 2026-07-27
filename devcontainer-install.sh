@@ -14,6 +14,7 @@ if command -v sudo &>/dev/null; then
     "$HOME/.cache" \
     "$HOME/.npm" \
     "$HOME/.tmux" \
+    "$HOME/.zsh_history_dir" \
     2>/dev/null || true
 fi
 
