@@ -1,4 +1,5 @@
 azure-cli
+bat
 bzip2
 cmake
 fzf
