@@ -74,21 +74,50 @@ function _dc_config_paths() {
   printf "%s\n%s\n" "$merged_config" "$tmpdir"
 }
 
+# Print dev's usage/help text.
+function _dev_usage() {
+  cat <<'EOF'
+Usage: dev [options] [project] [extra...]
+
+Enter a devcontainer, creating it if needed. Builds the container on first
+run, then creates a tmux session whose panes connect into the container via
+docker exec.
+
+Arguments:
+  project        Workspace directory to use (default: current directory)
+  extra...       Additional project directories to mount alongside
+
+Options:
+  -h, --help     Show this help message and exit
+  -n, --no-ssh   Start without SSH agent forwarding (forces a fresh container)
+
+Examples:
+  dev                    Use current directory as workspace
+  dev myproj             Use ./myproj as workspace
+  dev projA projB        projA as workspace, projB mounted alongside
+  dev --no-ssh myproj    Start myproj without SSH agent access
+EOF
+}
+
 # Enter a devcontainer, creating it if needed.
 # Builds the container on first run, then creates a tmux session whose panes
 # connect into the container via docker exec. Splits are handled by the global
 # default-command dispatcher (~/.tmux/default-cmd.sh).
 #
-# Usage:
-#   dev              - use current directory as workspace
-#   dev project      - use project as workspace
-#   dev projA projB  - projA as workspace, projB mounted alongside
-#   dev --no-ssh project  - without SSH agent access
+# Usage: dev [-h|--help] [-n|--no-ssh] [project] [extra...]
+# Run `dev --help` for details.
 function dev() {
+  local -A opts
+  zparseopts -D -E -A opts -- h -help n -no-ssh
+
+  if (( ${+opts[-h]} || ${+opts[--help]} )); then
+    _dev_usage
+    return 0
+  fi
+
   local no_ssh="0"
-  if [[ "$1" == "--no-ssh" ]]; then
+  if (( ${+opts[-n]} || ${+opts[--no-ssh]} )); then
     no_ssh="1"
-    shift
   fi
 
   # Resolve workspace and extra mount paths
