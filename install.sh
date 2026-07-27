@@ -44,16 +44,22 @@ for file in "${files[@]}"; do
   echo "Linked $file"
 done
 
-TMUX_CONF_LOCAL="$HOME/.tmux.conf.local"
+TMUX_CONF="$HOME/.tmux.conf"
 SOURCE_LINE="source-file ~/.tmux/devcontainer.conf"
-if [ -f "$TMUX_CONF_LOCAL" ] && grep -qF "$SOURCE_LINE" "$TMUX_CONF_LOCAL"; then
+if [ -f "$TMUX_CONF" ] && grep -qF "$SOURCE_LINE" "$TMUX_CONF"; then
   echo "tmux already configured."
 else
   echo
-  echo "To enable the tmux default-command, add this to ~/.tmux.conf.local:"
-  echo
-  echo "  $SOURCE_LINE"
-  echo
+  echo "The tmux default-command needs to be configured for devcontainer panes."
+  printf "Add '%s' to %s? [y/N] " "$SOURCE_LINE" "$TMUX_CONF"
+  read -r answer
+  if [[ "$answer" =~ ^[Yy]$ ]]; then
+    printf '%s\n' "$SOURCE_LINE" >>"$TMUX_CONF"
+    echo "Done."
+  else
+    echo "Skipped. You can add it manually later:"
+    echo "  echo '$SOURCE_LINE' >> $TMUX_CONF"
+  fi
 fi
 
 echo
