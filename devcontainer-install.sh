@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
-DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
+SETUP_DIR="$(cd "$(dirname "$0")" && pwd)"
+DOTFILES_REPO="https://github.com/lars-petter-hauge/dotfiles"
+DOTFILES_DIR="$HOME/dotfiles"
 
 # Fix ownership of volume-mounted directories (Docker creates them as root)
 if command -v sudo &>/dev/null; then
@@ -24,7 +26,7 @@ fi
 mkdir -p "$HOME/.config/nix"
 echo "experimental-features = nix-command flakes" >"$HOME/.config/nix/nix.conf"
 
-nix profile install $(sed 's/^/nixpkgs#/' "$DOTFILES_DIR/nix-packages.txt" | tr '\n' ' ')
+nix profile install $(sed 's/^/nixpkgs#/' "$SETUP_DIR/nix-packages.txt" | tr '\n' ' ')
 
 gh extension install github/gh-copilot 2>/dev/null || true
 
@@ -32,5 +34,10 @@ if command -v rustup &>/dev/null && ! rustup show active-toolchain &>/dev/null; 
   rustup default stable
 fi
 
-# Run shared install (symlinks, plugins)
-"$DOTFILES_DIR/install_local.sh"
+# Clone (or update) the dotfiles repo and run its symlink install
+if [ -d "$DOTFILES_DIR/.git" ]; then
+  git -C "$DOTFILES_DIR" pull --ff-only
+else
+  git clone "$DOTFILES_REPO" "$DOTFILES_DIR"
+fi
+"$DOTFILES_DIR/install.sh"
