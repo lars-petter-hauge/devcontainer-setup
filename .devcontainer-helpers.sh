@@ -88,14 +88,15 @@ Arguments:
   extra...       Additional project directories to mount alongside
 
 Options:
-  -h, --help     Show this help message and exit
-  -n, --no-ssh   Start without SSH agent forwarding (forces a fresh container)
+  -h, --help              Show this help message and exit
+  -s, --ssh, --enable-ssh Forward the SSH agent into the container (forces
+                          a fresh container if one is already running)
 
 Examples:
-  dev                    Use current directory as workspace
+  dev                    Use current directory as workspace (no SSH agent)
   dev myproj             Use ./myproj as workspace
   dev projA projB        projA as workspace, projB mounted alongside
-  dev --no-ssh myproj    Start myproj without SSH agent access
+  dev --ssh myproj       Start myproj with SSH agent access
 EOF
 }
 
@@ -104,21 +105,25 @@ EOF
 # connect into the container via docker exec. Splits are handled by the global
 # default-command dispatcher (~/.tmux/default-cmd.sh).
 #
-# Usage: dev [-h|--help] [-n|--no-ssh] [project] [extra...]
+# Usage: dev [-h|--help] [-s|--ssh|--enable-ssh] [project] [extra...]
 # Run `dev --help` for details.
 function dev() {
   local -A opts
-  zparseopts -D -E -A opts -- h -help n -no-ssh
+  zparseopts -D -E -A opts -- h -help s -ssh -enable-ssh
 
   if (( ${+opts[-h]} || ${+opts[--help]} )); then
     _dev_usage
     return 0
   fi
 
-  local no_ssh="0"
-  if (( ${+opts[-n]} || ${+opts[--no-ssh]} )); then
-    no_ssh="1"
+  # SSH forwarding is opt-in; explicitly requesting it forces a fresh
+  # container so an already-running one picks up the SSH mount.
+  local ssh_requested="0"
+  if (( ${+opts[-s]} || ${+opts[--ssh]} || ${+opts[--enable-ssh]} )); then
+    ssh_requested="1"
   fi
+  local no_ssh="1"
+  [[ "$ssh_requested" == "1" ]] && no_ssh="0"
 
   # Resolve workspace and extra mount paths
   local ws
@@ -134,11 +139,11 @@ function dev() {
     done
   fi
 
-  # Find existing container or rebuild if --no-ssh requires a fresh one
+  # Find existing container or rebuild if --ssh requires a fresh one
   local container_id
   container_id=$(docker ps -q --filter "label=devcontainer.local_folder=$ws")
 
-  if [[ -n "$container_id" && "$no_ssh" == "1" ]]; then
+  if [[ -n "$container_id" && "$ssh_requested" == "1" ]]; then
     docker rm -f "$container_id" >/dev/null
     container_id=""
   fi
@@ -188,7 +193,7 @@ EOF
   chmod +x "$wrapper"
 
   # Create tmux session and switch to it
-  [[ "$no_ssh" == "1" ]] && tmux kill-session -t "$session_name" 2>/dev/null
+  [[ "$ssh_requested" == "1" ]] && tmux kill-session -t "$session_name" 2>/dev/null
 
   if ! tmux has-session -t "$session_name" 2>/dev/null; then
     tmux new-session -d -s "$session_name" \
