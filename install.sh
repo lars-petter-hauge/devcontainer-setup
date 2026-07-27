@@ -19,9 +19,10 @@ if [ "${#missing[@]}" -gt 0 ]; then
   exit 1
 fi
 
-# Symlink the global devcontainer config (default devcontainer.json + overlay.json)
-target="$HOME/.devcontainer"
-source="$SETUP_DIR/.devcontainer"
+# Symlink the helpers file so it can be sourced from a fixed path, regardless
+# of where this repo is cloned.
+target="$HOME/.devcontainer-helpers.sh"
+source="$SETUP_DIR/.devcontainer-helpers.sh"
 
 if [ -L "$target" ]; then
   unlink "$target"
@@ -30,11 +31,11 @@ elif [ -e "$target" ]; then
 fi
 
 ln -s "$source" "$target"
-echo "Linked .devcontainer"
+echo "Linked .devcontainer-helpers.sh"
 
 echo
 echo "devcontainer-setup installed."
 echo "Add the following line to your shell rc file to enable the 'dev' function:"
 echo
-echo "  source \"$SETUP_DIR/.devcontainer-helpers.sh\""
+echo "  source \"$target\""
 echo

@@ -1,8 +1,13 @@
 export NODE_COMPILE_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/node-compile-cache"
 
+# Directory this file lives in, resolved via the ~/.devcontainer-helpers.sh
+# symlink. Falls back to the sourced path if not symlinked. Lets us find
+# devcontainer-defaults/ alongside this file's real location.
+DEVCONTAINER_SETUP_DIR="$(cd "$(dirname "$(readlink "$HOME/.devcontainer-helpers.sh" 2>/dev/null || echo "${(%):-%x}")")" && pwd)"
+
 # Resolve and merge devcontainer config files.
-# Finds the project's devcontainer.json, merges it with the global overlay
-# (~/. devcontainer/overlay.json), injects SSH agent mounts and extra bind mounts.
+# Finds the project's devcontainer.json, merges it with the default overlay
+# (devcontainer-defaults/overlay.json), injects SSH agent mounts and extra bind mounts.
 # Returns: merged config path and temp dir path (for cleanup) on separate lines.
 function _dc_config_paths() {
   local ws="$1"
@@ -10,17 +15,17 @@ function _dc_config_paths() {
   shift 2
   local -a extra_mounts=("$@")
 
-  # Locate the base devcontainer.json (project-specific or global fallback)
+  # Locate the base devcontainer.json (project-specific or default fallback)
   local config
   if [ -f "$ws/.devcontainer/devcontainer.json" ]; then
     config="$ws/.devcontainer/devcontainer.json"
   elif [ -f "$ws/.devcontainer.json" ]; then
     config="$ws/.devcontainer.json"
   else
-    config="$HOME/.devcontainer/devcontainer.json"
+    config="$DEVCONTAINER_SETUP_DIR/devcontainer-defaults/devcontainer.json"
   fi
 
-  local overlay="$HOME/.devcontainer/overlay.json"
+  local overlay="$DEVCONTAINER_SETUP_DIR/devcontainer-defaults/overlay.json"
   local merged_config="$config"
   local tmpdir=""
   if [ -f "$overlay" ]; then
