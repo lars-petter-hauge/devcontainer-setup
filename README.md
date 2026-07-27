@@ -91,5 +91,6 @@ rmdev --name feature-x myproj  # Remove container, tmux session, and worktree
    container.
 
 4. **Persistent volumes** — Named Docker volumes preserve the Nix store,
-   cargo registry, pip/npm caches, neovim data, and zsh history across
-   container rebuilds.
+   cargo registry, pip/npm caches, neovim data, GitHub Copilot CLI session
+   data (`~/.copilot`, shared globally so `rmdev`/container rebuilds don't
+   lose session history), and zsh history across container rebuilds.

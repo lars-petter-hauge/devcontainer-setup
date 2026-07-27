@@ -18,6 +18,7 @@
     "type=volume,source=devcontainer-nvim-data,target=/home/vscode/.local/share/nvim",
     "type=volume,source=devcontainer-gh-data,target=/home/vscode/.local/share/gh",
     "type=volume,source=devcontainer-tmux-plugins,target=/home/vscode/.tmux/plugins",
+    "type=volume,source=devcontainer-copilot-data,target=/home/vscode/.copilot",
     "type=volume,source=devcontainer-zsh-history-${localWorkspaceFolderBasename},target=/home/vscode/.zsh_history_dir"
   ]
 }
