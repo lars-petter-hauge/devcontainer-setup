@@ -161,7 +161,7 @@ function dev() {
     devcontainer up --workspace-folder "$ws" \
       --config "$merged_config" \
       --dotfiles-repository https://github.com/lars-petter-hauge/devcontainer-setup \
-      --dotfiles-target-path ~/devcontainer-setup \
+      --dotfiles-target-path '~/devcontainer-setup' \
       --dotfiles-install-command ./devcontainer-install.sh
     local exit_code=$?
 
