@@ -41,7 +41,7 @@ dev .                      # Enter/create container for current directory
 dev myproj                 # Enter/create container for ./myproj
 dev projA projB            # projA as workspace, projB mounted alongside
 dev --ssh myproj           # Start with SSH agent forwarded
-dev --worktree feature-x myproj  # Isolated container/session on a git worktree
+dev --name feature-x myproj  # Isolated session for a parallel task
 ```
 
 When called without arguments, `dev` shows running devcontainers. When given a
@@ -52,26 +52,27 @@ session whose panes connect into the container.
 Since containers and tmux sessions are keyed off the workspace directory,
 running multiple sessions on the same checkout means they all share one
 container and file tree. To work on several things for the same project in
-parallel without them interfering, use `--worktree`:
+parallel without them interfering, give the session a name with `--name`:
 
 ```sh
-dev --worktree feature-x myproj
+dev --name feature-x myproj
 ```
 
-This creates (or reuses) a git worktree at `myproj-wt-feature-x` checked out
-to `feature-x` (creating the branch if it doesn't exist yet), and uses that
-worktree as the workspace — giving you a separate container, tmux session,
-and working tree, while still sharing the global cache volumes (Nix store,
-cargo, pip, npm, etc.) with your other devcontainers. `--worktree` requires
-the target to already be a git repository; without it, `dev` works exactly
-as before on any directory.
+This starts (or reuses) an isolated session called `feature-x` for `myproj`,
+with its own container, tmux session, and working tree — so it never touches
+files from your other sessions on the same project, while still sharing the
+global cache volumes (Nix store, cargo, pip, npm, etc.) with your other
+devcontainers. Under the hood this is backed by a git worktree (and a branch
+of the same name, created if it doesn't exist yet), so `--name` requires the
+target to already be a git repository; without it, `dev` works exactly as
+before on any directory.
 
 To remove a running devcontainer:
 
 ```sh
 rmdev              # Remove container for current directory
 rmdev myproj       # Remove container for ./myproj
-rmdev --worktree feature-x myproj  # Remove container, tmux session, and worktree
+rmdev --name feature-x myproj  # Remove container, tmux session, and worktree
 ```
 
 ## How it works

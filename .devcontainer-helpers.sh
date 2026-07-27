@@ -87,18 +87,18 @@ When called without arguments, lists running devcontainers instead of
 building a new one. Use `dev .` to explicitly target the current directory.
 
 Arguments:
-  project        Workspace directory to use (with --worktree, the repo the
-                 worktree is created from)
+  project        Workspace directory to use (with --name, the repo the
+                 session's worktree is created from)
   extra...       Additional project directories to mount alongside
 
 Options:
   -h, --help              Show this help message and exit
   -s, --ssh, --enable-ssh Forward the SSH agent into the container (forces
                           a fresh container if one is already running)
-  -w, --worktree BRANCH   Create (if needed) a git worktree for BRANCH next
-                          to the project, and use it as the workspace instead
-                          of the project directory itself. Requires project
-                          to be inside a git repository.
+  -n, --name NAME         Start (or reuse) an isolated session for this
+                          project: its own git worktree, container, and tmux
+                          session, so parallel sessions never touch each
+                          other's files. Requires project to be a git repo.
 
 Examples:
   dev                    Enter container for cwd, or list running containers
@@ -106,9 +106,9 @@ Examples:
   dev myproj             Use ./myproj as workspace
   dev projA projB        projA as workspace, projB mounted alongside
   dev --ssh myproj       Start myproj with SSH agent access
-  dev --worktree feature-x myproj
-                         Create/reuse a worktree for feature-x from ./myproj
-                         at ./myproj-wt-feature-x and use it as the workspace
+  dev --name feature-x myproj
+                         Start (or reuse) an isolated "feature-x" session for
+                         ./myproj, running independently of any other session
 EOF
 }
 
@@ -129,7 +129,7 @@ function _dev_ensure_worktree() {
   local repo="$1" branch="$2"
 
   if ! git -C "$repo" rev-parse --is-inside-work-tree &>/dev/null; then
-    echo "dev: --worktree requires $repo to be a git repository" >&2
+    echo "dev: --name requires $repo to be a git repository" >&2
     return 1
   fi
 
@@ -150,6 +150,47 @@ function _dev_ensure_worktree() {
   echo "$wt_path"
 }
 
+# Strip a "-wt-<branch>" worktree suffix, if present, to get the base repo
+# path for a workspace (used to find sibling worktree containers).
+function _dev_repo_root() {
+  local ws="$1"
+  if [[ "$ws" == *-wt-* ]]; then
+    echo "${ws%-wt-*}"
+  else
+    echo "$ws"
+  fi
+}
+
+# Print any other running devcontainers that belong to the same repo as $ws
+# (the repo itself plus any `dev --name` siblings of it), excluding $ws
+# itself. Helps avoid forgetting about other sessions in flight.
+function _dev_print_related_containers() {
+  local ws="$1"
+  local root
+  root="$(_dev_repo_root "$ws")"
+
+  local running
+  running=$(docker ps --filter "label=devcontainer.local_folder" --format '{{.Label "devcontainer.local_folder"}}' 2>/dev/null)
+  [[ -z "$running" ]] && return 0
+
+  local -a related=()
+  local folder
+  while IFS= read -r folder; do
+    [[ -z "$folder" || "$folder" == "$ws" ]] && continue
+    if [[ "$folder" == "$root" || "$folder" == "$root"-wt-* ]]; then
+      related+=("$folder")
+    fi
+  done <<< "$running"
+
+  (( ${#related[@]} == 0 )) && return 0
+
+  echo "Other running sessions for this repo:"
+  local f
+  for f in "${related[@]}"; do
+    echo "  $(basename "$f")  ($f)"
+  done
+}
+
 # Enter a devcontainer, creating it if needed.
 # Builds the container on first run, then creates a tmux session whose panes
 # connect into the container via docker exec. Splits are handled by the global
@@ -159,7 +200,7 @@ function _dev_ensure_worktree() {
 # Run `dev --help` for details.
 function dev() {
   local -A opts
-  zparseopts -D -E -A opts -- h -help s -ssh -enable-ssh w: -worktree:
+  zparseopts -D -E -A opts -- h -help s -ssh -enable-ssh n: -name:
 
   if (( ${+opts[-h]} || ${+opts[--help]} )); then
     _dev_usage
@@ -175,14 +216,22 @@ function dev() {
   local no_ssh="1"
   [[ "$ssh_requested" == "1" ]] && no_ssh="0"
 
-  # --worktree is opt-in and only touches git; without it dev behaves exactly
-  # as before, regardless of whether the target is a git repo at all.
+  # --name is opt-in and only touches git under the hood (via a worktree);
+  # without it dev behaves exactly as before, regardless of whether the
+  # target is a git repo at all.
   local worktree_branch=""
-  if (( ${+opts[-w]} )); then
-    worktree_branch="${opts[-w]}"
-  elif (( ${+opts[--worktree]} )); then
-    worktree_branch="${opts[--worktree]}"
+  if (( ${+opts[-n]} )); then
+    worktree_branch="${opts[-n]}"
+  elif (( ${+opts[--name]} )); then
+    worktree_branch="${opts[--name]}"
   fi
+
+  # A worktree's .git is a file pointing at an absolute path back into the
+  # main repo's .git/worktrees/<name> directory, so that path must also be
+  # reachable inside the worktree's container. Bind-mount only the main
+  # repo's .git dir (not its working tree) at the same absolute path, so the
+  # worktree container stays isolated from the main checkout's files.
+  local worktree_git_mount=""
 
   if [[ -n "$worktree_branch" ]]; then
     local repo_arg="."
@@ -196,6 +245,7 @@ function dev() {
 
     local wt_path
     wt_path="$(_dev_ensure_worktree "$repo" "$worktree_branch")" || return 1
+    worktree_git_mount="$repo/.git"
 
     set -- "$wt_path" "$@"
   fi
@@ -241,8 +291,11 @@ function dev() {
 
   # Build and start the container if not already running
   if [[ -z "$container_id" ]]; then
+    local -a internal_mounts=()
+    [[ -n "$worktree_git_mount" ]] && internal_mounts+=("$worktree_git_mount")
+
     local -a config_paths
-    config_paths=("${(@f)$(_dc_config_paths "$ws" "$no_ssh" "${extra[@]}")}") || return 1
+    config_paths=("${(@f)$(_dc_config_paths "$ws" "$no_ssh" "${extra[@]}" "${internal_mounts[@]}")}") || return 1
     local merged_config="${config_paths[1]}"
     local generated_config="${config_paths[2]}"
 
@@ -291,21 +344,24 @@ EOF
       -e "DEVCONTAINER_ID=$container_id" \
       -e "DEVCONTAINER_NO_SSH=$no_ssh"
   fi
+
+  _dev_print_related_containers "$ws"
+
   tmux switch-client -t "$session_name"
 }
 
 # Remove a running devcontainer for the given workspace.
-# With -w/--worktree BRANCH, also kills the associated tmux session and
-# removes the git worktree at <repo>-wt-<branch> (created by `dev --worktree`).
+# With -n/--name NAME, also kills the associated tmux session and removes
+# the git worktree at <repo>-wt-<name> (created by `dev --name`).
 function rmdev() {
   local -A opts
-  zparseopts -D -E -A opts -- w: -worktree:
+  zparseopts -D -E -A opts -- n: -name:
 
   local worktree_branch=""
-  if (( ${+opts[-w]} )); then
-    worktree_branch="${opts[-w]}"
-  elif (( ${+opts[--worktree]} )); then
-    worktree_branch="${opts[--worktree]}"
+  if (( ${+opts[-n]} )); then
+    worktree_branch="${opts[-n]}"
+  elif (( ${+opts[--name]} )); then
+    worktree_branch="${opts[--name]}"
   fi
 
   local repo
