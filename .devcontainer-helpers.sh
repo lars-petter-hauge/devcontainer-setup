@@ -52,7 +52,7 @@ function _dc_config_paths() {
 
     local extra_mounts_json="[]"
     if (( ${#extra_mounts[@]} > 0 )); then
-      extra_mounts_json=$(printf '%s\n' "${extra_mounts[@]}" | jq -R '[inputs // empty | "type=bind,source=\(.),target=\(.)"]' 2>/dev/null || echo "[]")
+      extra_mounts_json=$(printf '%s\n' "${extra_mounts[@]}" | jq -Rn '[inputs | select(. != "") | "type=bind,source=\(.),target=\(.)"]' 2>/dev/null || echo "[]")
     fi
 
     # Deep-merge base config with overlay: features, mounts, extensions, SSH, build context
