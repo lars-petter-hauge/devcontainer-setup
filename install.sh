@@ -19,23 +19,33 @@ if [ "${#missing[@]}" -gt 0 ]; then
   exit 1
 fi
 
-# Symlink the helpers file so it can be sourced from a fixed path, regardless
-# of where this repo is cloned.
-target="$HOME/.devcontainer-helpers.sh"
-source="$SETUP_DIR/.devcontainer-helpers.sh"
+# Symlink files that must live at a fixed path, regardless of where this repo
+# is cloned: the helpers file (sourced from shell rc) and the tmux
+# default-command script which dev()
+# relies on to attach panes inside devcontainers.
+files=(
+  .devcontainer-helpers.sh
+  .tmux/default-cmd.sh
+)
 
-if [ -L "$target" ]; then
-  unlink "$target"
-elif [ -e "$target" ]; then
-  mv "$target" "$target.bak"
-fi
+for file in "${files[@]}"; do
+  target="$HOME/$file"
+  source="$SETUP_DIR/$file"
 
-ln -s "$source" "$target"
-echo "Linked .devcontainer-helpers.sh"
+  if [ -L "$target" ]; then
+    unlink "$target"
+  elif [ -e "$target" ]; then
+    mv "$target" "$target.bak"
+  fi
+
+  mkdir -p "$(dirname "$target")"
+  ln -s "$source" "$target"
+  echo "Linked $file"
+done
 
 echo
 echo "devcontainer-setup installed."
 echo "Add the following line to your shell rc file to enable the 'dev' function:"
 echo
-echo "  source \"$target\""
+echo "  source \"$HOME/.devcontainer-helpers.sh\""
 echo
