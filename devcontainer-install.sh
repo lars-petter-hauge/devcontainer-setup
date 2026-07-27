@@ -29,8 +29,6 @@ echo "experimental-features = nix-command flakes" >"$HOME/.config/nix/nix.conf"
 
 nix profile install $(sed 's/^/nixpkgs#/' "$SETUP_DIR/nix-packages.txt" | tr '\n' ' ')
 
-gh extension install github/gh-copilot 2>/dev/null || true
-
 if command -v rustup &>/dev/null && ! rustup show active-toolchain &>/dev/null; then
   rustup default stable
 fi
