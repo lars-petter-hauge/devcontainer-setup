@@ -14,6 +14,7 @@ if command -v sudo &>/dev/null; then
     /nix \
     "$HOME/.local" \
     "$HOME/.cargo" \
+    "$HOME/.rustup" \
     "$HOME/.cache" \
     "$HOME/.npm" \
     "$HOME/.tmux" \
@@ -24,6 +25,10 @@ if command -v sudo &>/dev/null; then
     [ "$owner" = "$(id -u)" ] || sudo chown -R "$(id -u):$(id -g)" "$dir" 2>/dev/null || true
   done
 fi
+
+# Pick up an already-installed Nix from the persisted volumes before
+# checking, so cached rebuilds don't re-run the (slow) installer.
+. "$HOME/.nix-profile/etc/profile.d/nix.sh" 2>/dev/null || true
 
 # Install Nix if not present
 if ! command -v nix &>/dev/null; then
