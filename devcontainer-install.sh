@@ -17,7 +17,6 @@ if command -v sudo &>/dev/null; then
     "$HOME/.rustup" \
     "$HOME/.cache" \
     "$HOME/.npm" \
-    "$HOME/.tmux" \
     "$HOME/.copilot" \
     "$HOME/.zsh_history_dir"; do
     [ -e "$dir" ] || continue

@@ -28,6 +28,7 @@ ruff
 rustup
 starship
 tmux
+zellij
 tree
 uv
 watch
