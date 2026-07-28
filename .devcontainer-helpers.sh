@@ -80,7 +80,7 @@ function _dev_usage() {
 Usage: dev [options] [project] [extra...]
 
 Enter a devcontainer, creating it if needed. Builds the container on first
-run, then creates a Zellij session whose panes connect into the container via
+run, then creates a tmux session whose panes connect into the container via
 docker exec.
 
 When called without arguments, always lists running devcontainers instead
@@ -97,10 +97,9 @@ Options:
   -s, --ssh, --enable-ssh Forward the SSH agent into the container (forces
                           a fresh container if one is already running)
   -n, --name NAME         Start (or reuse) an isolated session for this
-                          project: its own git worktree, container, and
-                          Zellij session, so parallel sessions never touch
-                          each other's files. Requires project to be a git
-                          repo.
+                          project: its own git worktree, container, and tmux
+                          session, so parallel sessions never touch each
+                          other's files. Requires project to be a git repo.
 
 Examples:
   dev                    List running containers (does not attach)
@@ -194,10 +193,9 @@ function _dev_print_related_containers() {
 }
 
 # Enter a devcontainer, creating it if needed.
-# Builds the container on first run, then creates a Zellij session whose
-# panes connect into the container via docker exec. New panes/tabs are
-# dispatched via ~/.zellij/dispatch.sh (see ~/.zellij/config-snippet.kdl
-# keybinds and the ~/.zellij/layouts/devcontainer.kdl default layout).
+# Builds the container on first run, then creates a tmux session whose panes
+# connect into the container via docker exec. Splits are handled by the global
+# default-command dispatcher (~/.tmux/default-cmd.sh).
 #
 # Usage: dev [-h|--help] [-s|--ssh|--enable-ssh] [project] [extra...]
 # Run `dev --help` for details.
@@ -327,7 +325,7 @@ function dev() {
   # the "-wt-<branch>" suffix (needed on the host to keep worktree
   # directories collision-free) serves no purpose there. Use the repo's
   # plain basename for the in-container symlink/cwd, while keeping the
-  # suffixed name for the Zellij session and wrapper script, which are shared
+  # suffixed name for the tmux session and wrapper script, which are shared
   # across the host and must stay unique per parallel session.
   local display_name
   display_name="$(basename "$(_dev_repo_root "$ws")")"
@@ -344,7 +342,7 @@ function dev() {
   session_name="$project_name"
 
   # Write the wrapper script that docker-execs into the container.
-  # This is picked up by ~/.zellij/dispatch.sh for all panes in this session.
+  # This is picked up by ~/.tmux/default-cmd.sh for all panes in this session.
   local wrapper="/tmp/devcontainer-exec-${session_name}"
   cat > "$wrapper" <<EOF
 #!/bin/sh
@@ -353,21 +351,22 @@ exec docker exec -it -e TERM="$TERM" -e USER=vscode -e "GH_TOKEN=\$GH_TOKEN" -u 
 EOF
   chmod +x "$wrapper"
 
-  # Create/attach the Zellij session. --create-background only creates it
-  # if missing; -c both creates (if missing) and attaches. If we're already
-  # inside a Zellij client, detach first so attaching doesn't nest sessions
-  # (Zellij has no tmux-style switch-client).
-  [[ "$ssh_requested" == "1" ]] && zellij delete-session -f "$session_name" 2>/dev/null
+  # Create tmux session and switch to it
+  [[ "$ssh_requested" == "1" ]] && tmux kill-session -t "$session_name" 2>/dev/null
+
+  if ! tmux has-session -t "$session_name" 2>/dev/null; then
+    tmux new-session -d -s "$session_name" \
+      -e "DEVCONTAINER_ID=$container_id" \
+      -e "DEVCONTAINER_NO_SSH=$no_ssh"
+  fi
 
   _dev_print_related_containers "$ws"
 
-  [[ -n "$ZELLIJ" ]] && zellij action detach
-
-  DEVCONTAINER_ID="$container_id" DEVCONTAINER_NO_SSH="$no_ssh" zellij attach -c "$session_name"
+  tmux switch-client -t "$session_name"
 }
 
 # Remove a running devcontainer for the given workspace.
-# With -n/--name NAME, also kills the associated Zellij session and removes
+# With -n/--name NAME, also kills the associated tmux session and removes
 # the git worktree at <repo>-wt-<name> (created by `dev --name`).
 function rmdev() {
   local -A opts
@@ -397,7 +396,7 @@ function rmdev() {
   fi
 
   if [[ -n "$worktree_branch" ]]; then
-    zellij delete-session -f "$(basename "$ws")" 2>/dev/null
+    tmux kill-session -t "$(basename "$ws")" 2>/dev/null
     git -C "$repo" worktree remove "$ws" 2>/dev/null ||
       echo "rmdev: could not remove worktree $ws (uncommitted changes? try: git -C $repo worktree remove --force $ws)"
   fi

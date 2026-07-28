@@ -1,7 +1,7 @@
 # devcontainer-setup
 
-Orchestration for my devcontainer workflow — a Zellij-based approach where each
-project gets its own Zellij session with panes that exec into a devcontainer.
+Orchestration for my devcontainer workflow — a tmux-based approach where each
+project gets its own tmux session with panes that exec into a devcontainer.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ npm install -g @devcontainers/cli
 
 ## Installation
 
-Run the install script to symlink the helper files and configure Zellij:
+Run the install script to symlink the helper files and configure tmux:
 
 ```sh
 ./install.sh
@@ -33,7 +33,7 @@ source "$HOME/.devcontainer-helpers.sh"
 
 ## Usage
 
-The `dev` function manages devcontainers via Zellij:
+The `dev` function manages devcontainers via tmux:
 
 ```sh
 dev                        # List running devcontainers
@@ -46,10 +46,10 @@ dev --name feature-x myproj  # Isolated session for a parallel task
 
 When called without arguments, `dev` shows running devcontainers. When given a
 project directory, it builds the container on first run (using the project's
-`.devcontainer/devcontainer.json` or a default fallback), then creates a Zellij
+`.devcontainer/devcontainer.json` or a default fallback), then creates a tmux
 session whose panes connect into the container.
 
-Since containers and Zellij sessions are keyed off the workspace directory,
+Since containers and tmux sessions are keyed off the workspace directory,
 running multiple sessions on the same checkout means they all share one
 container and file tree. To work on several things for the same project in
 parallel without them interfering, give the session a name with `--name`:
@@ -59,7 +59,7 @@ dev --name feature-x myproj
 ```
 
 This starts (or reuses) an isolated session called `feature-x` for `myproj`,
-with its own container, Zellij session, and working tree — so it never touches
+with its own container, tmux session, and working tree — so it never touches
 files from your other sessions on the same project, while still sharing the
 global cache volumes (Nix store, cargo, pip, npm, etc.) with your other
 devcontainers. Under the hood this is backed by a git worktree (and a branch
@@ -72,7 +72,7 @@ To remove a running devcontainer:
 ```sh
 rmdev              # Remove container for current directory
 rmdev myproj       # Remove container for ./myproj
-rmdev --name feature-x myproj  # Remove container, Zellij session, and worktree
+rmdev --name feature-x myproj  # Remove container, tmux session, and worktree
 ```
 
 ## How it works
@@ -85,13 +85,10 @@ rmdev --name feature-x myproj  # Remove container, Zellij session, and worktree
    `devcontainer-install.sh`, which installs Nix, packages from
    `nix-packages.txt`, and the user's dotfiles.
 
-3. **Zellij integration** — Each project gets a Zellij session. A per-session
+3. **tmux integration** — Each project gets a tmux session. A per-session
    wrapper script (`/tmp/devcontainer-exec-<session>`) is picked up by
-   `~/.zellij/dispatch.sh` so that new panes/tabs automatically exec into the
-   container. Since Zellij has no tmux-style global default-command, this is
-   wired up via a default layout and explicit keybind overrides for
-   new-pane/new-tab (see `.zellij/config-snippet.kdl`, appended to the user's
-   `~/.config/zellij/config.kdl` by `install.sh`).
+   `~/.tmux/default-cmd.sh` so that new panes automatically exec into the
+   container.
 
 4. **Persistent volumes** — Named Docker volumes preserve the Nix store,
    cargo registry, pip/npm caches, neovim data, GitHub Copilot CLI session

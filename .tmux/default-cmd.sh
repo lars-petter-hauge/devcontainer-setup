@@ -1,5 +1,5 @@
 #!/bin/sh
-SESSION="$ZELLIJ_SESSION_NAME"
+SESSION=$(tmux display-message -p '#{session_name}')
 WRAPPER="/tmp/devcontainer-exec-$SESSION"
 if [ -x "$WRAPPER" ]; then
   exec "$WRAPPER"

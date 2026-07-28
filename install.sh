@@ -20,15 +20,13 @@ if [ "${#missing[@]}" -gt 0 ]; then
 fi
 
 # Symlink files that must live at a fixed path, regardless of where this repo
-# is cloned: the helpers file (sourced from shell rc), the Zellij dispatcher
-# (referenced by bare name via PATH, see below), and the Zellij layout
-# (mirrored at .config/zellij/layouts/ here so it lands in zellij's own
-# layout dir and can be referenced by bare name, e.g. `default_layout
-# "devcontainer"`).
+# is cloned: the helpers file (sourced from shell rc) and the tmux
+# default-command script which dev()
+# relies on to attach panes inside devcontainers.
 files=(
   .devcontainer-helpers.sh
-  .zellij/dispatch.sh
-  .config/zellij/layouts/devcontainer.kdl
+  .tmux/default-cmd.sh
+  .tmux/devcontainer.conf
 )
 
 for file in "${files[@]}"; do
@@ -43,19 +41,30 @@ for file in "${files[@]}"; do
 
   mkdir -p "$(dirname "$target")"
   ln -s "$source" "$target"
-  echo "Linked $file -> $target"
+  echo "Linked $file"
 done
+
+TMUX_CONF="$HOME/.tmux.conf"
+SOURCE_LINE="source-file ~/.tmux/devcontainer.conf"
+if [ -f "$TMUX_CONF" ] && grep -qF "$SOURCE_LINE" "$TMUX_CONF"; then
+  echo "tmux already configured."
+else
+  echo
+  echo "The tmux default-command needs to be configured for devcontainer panes."
+  printf "Add '%s' to %s? [y/N] " "$SOURCE_LINE" "$TMUX_CONF"
+  read -r answer
+  if [[ "$answer" =~ ^[Yy]$ ]]; then
+    printf '%s\n' "$SOURCE_LINE" >>"$TMUX_CONF"
+    echo "Done."
+  else
+    echo "Skipped. You can add it manually later:"
+    echo "  echo '$SOURCE_LINE' >> $TMUX_CONF"
+  fi
+fi
 
 echo
 echo "devcontainer-setup installed."
-echo "Add the following line to your shell rc file to enable the 'dev' function"
-echo "and let zellij find the dispatcher by bare name (used in config.kdl):"
+echo "Add the following line to your shell rc file to enable the 'dev' function:"
 echo
 echo "  source \"$HOME/.devcontainer-helpers.sh\""
-echo "  export PATH=\"$HOME/.zellij:\$PATH\""
-echo
-echo "Zellij needs the following in your config.kdl so new panes/tabs attach"
-echo "to the right devcontainer (e.g. via a local, untracked include file):"
-echo
-cat "$SETUP_DIR/.zellij/config-snippet.kdl"
 echo
