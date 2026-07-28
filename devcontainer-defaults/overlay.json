@@ -12,8 +12,6 @@
   "workspaceFolder": "${localWorkspaceFolder}",
   "mounts": [
     "type=volume,source=devcontainer-nix,target=/nix",
-    "type=volume,source=devcontainer-nix-state,target=/home/vscode/.local/state/nix",
-    "type=volume,source=devcontainer-rustup,target=/home/vscode/.rustup",
     "type=volume,source=devcontainer-cargo-registry,target=/home/vscode/.cargo/registry",
     "type=volume,source=devcontainer-pip-cache,target=/home/vscode/.cache/pip",
     "type=volume,source=devcontainer-npm-cache,target=/home/vscode/.npm",
