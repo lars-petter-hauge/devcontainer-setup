@@ -2,6 +2,7 @@
 set -e
 
 SETUP_DIR="$(cd "$(dirname "$0")" && pwd)"
+NIXPKGS_TAG="nixos-26.05"
 DOTFILES_REPO="https://github.com/lars-petter-hauge/dotfiles"
 DOTFILES_DIR="$HOME/dotfiles"
 
@@ -34,7 +35,7 @@ fi
 mkdir -p "$HOME/.config/nix"
 echo "experimental-features = nix-command flakes" >"$HOME/.config/nix/nix.conf"
 
-nix profile install $(sed 's/^/nixpkgs#/' "$SETUP_DIR/nix-packages.txt" | tr '\n' ' ')
+nix profile install $(sed "s|^|github:NixOS/nixpkgs/$NIXPKGS_TAG#|" "$SETUP_DIR/nix-packages.txt" | tr '\n' ' ')
 
 if command -v rustup &>/dev/null && ! rustup show active-toolchain &>/dev/null; then
   rustup default stable
