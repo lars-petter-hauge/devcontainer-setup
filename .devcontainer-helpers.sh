@@ -352,9 +352,9 @@ EOF
   chmod +x "$wrapper"
 
   # Create tmux session and switch to it
-  [[ "$ssh_requested" == "1" ]] && tmux kill-session -t "$session_name" 2>/dev/null
+  [[ "$ssh_requested" == "1" ]] && tmux kill-session -t "=$session_name" 2>/dev/null
 
-  if ! tmux has-session -t "$session_name" 2>/dev/null; then
+  if ! tmux has-session -t "=$session_name" 2>/dev/null; then
     tmux new-session -d -s "$session_name" \
       -e "DEVCONTAINER_ID=$container_id" \
       -e "DEVCONTAINER_NO_SSH=$no_ssh"
@@ -362,7 +362,7 @@ EOF
 
   _dev_print_related_containers "$ws"
 
-  tmux switch-client -t "$session_name"
+  tmux switch-client -t "=$session_name"
 }
 
 # Remove a running devcontainer for the given workspace.
@@ -396,7 +396,7 @@ function rmdev() {
   fi
 
   if [[ -n "$worktree_branch" ]]; then
-    tmux kill-session -t "$(basename "$ws")" 2>/dev/null
+    tmux kill-session -t "=$(basename "$ws")" 2>/dev/null
     git -C "$repo" worktree remove "$ws" 2>/dev/null ||
       echo "rmdev: could not remove worktree $ws (uncommitted changes? try: git -C $repo worktree remove --force $ws)"
   fi
