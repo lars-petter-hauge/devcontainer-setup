@@ -399,6 +399,7 @@ function rmdev() {
     tmux kill-session -t "=$(basename "$ws")" 2>/dev/null
     git -C "$repo" worktree remove "$ws" 2>/dev/null ||
       echo "rmdev: could not remove worktree $ws (uncommitted changes? try: git -C $repo worktree remove --force $ws)"
+    git -C "$repo" worktree prune
   fi
 }
 
